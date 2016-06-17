@@ -15,7 +15,7 @@ public class TestsRunner {
     public void measureScanExecutionTime(){
         long start = System.nanoTime();
         try {
-            Main.main(new String[]{"/Users/tatianamalyutina/Books"});
+            Main.main(new String[]{"/"});
         } catch (IOException e) {
             e.printStackTrace();
         }
