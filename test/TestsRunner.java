@@ -27,7 +27,7 @@ public class TestsRunner {
     @Test(timeout=100)
     public void testScanExecutionTime() {
         try {
-            Main.main(new String[]{"/Users/tatianamalyutina/Books"});
+            Main.main(new String[]{"/Users/tatianamalyutina/Books", "-", "/Users/tatianamalyutina/Books/A Game Of Thrones ~ Books 1-5 EPUB,MOBI & PDF [GrYff0N]"});
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -53,6 +53,11 @@ public class TestsRunner {
         InputParameters parameters1 = new InputParameters(new String[]{"/Users/tatianamalyutina/Books"});
         assertEquals(null, parameters1.getExcludedFolders());
         assertEquals(1, parameters1.getIncludedFolders().size());
+
+        InputParameters parameters2 = new InputParameters(new String[]{"/Users/tatianamalyutina/Books", "-", "A Game Of Thrones ~ Books 1-5 EPUB,MOBI & PDF [GrYff0N]"});
+        assertEquals(1, parameters2.getExcludedFolders());
+        assertEquals(1, parameters2.getIncludedFolders().size());
+
 
     }
 
