@@ -64,6 +64,7 @@ public class Main {
         System.out.println("Scanned files: " + result.size());
         if (filesFailedToScan > 0) {
             System.out.println("Files failed to scan: " + filesFailedToScan);
+            System.out.println("You can find all failed files and causes in scan-error-log.txt");
         }
 
     }
@@ -98,7 +99,9 @@ public class Main {
         @Override
         public FileVisitResult visitFileFailed(Path file, IOException e)
                 throws IOException {
-            //todo: executor to write down errors log file
+            Path errorLog = Paths.get("scan-error-log.txt");
+            Files.write(errorLog, (e.toString() + "\n").getBytes(Charset.forName("UTF-8")), StandardOpenOption.APPEND, StandardOpenOption.CREATE);
+            System.out.println(e.toString());
             filesFailedToScan++;
             return FileVisitResult.CONTINUE;
         }
