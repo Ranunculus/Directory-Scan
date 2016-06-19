@@ -14,6 +14,7 @@ import java.util.TreeSet;
 public class ProcessFiles extends SimpleFileVisitor<Path> {
     private InputParameters inputParameters;
     private TreeSet<String> currentResult = new TreeSet<>();
+    private Path currentDirectory;
 
     public ProcessFiles(InputParameters parameters) {
         this.inputParameters = parameters;
@@ -64,6 +65,21 @@ public class ProcessFiles extends SimpleFileVisitor<Path> {
         if (inputParameters.getExcludedFolders() != null && inputParameters.getExcludedFolders().contains(aDir.toString())) {
             return FileVisitResult.SKIP_SUBTREE;
         }
+//        if(!aDir.equals(currentDirectory)) {
+//            Main.RecursiveWalk walk = new Main.RecursiveWalk(aDir, inputParameters);
+//            walk.fork();
+//            Main.RecursiveWalk.setWalks
+//            return FileVisitResult.SKIP_SUBTREE;
+//        }
         return FileVisitResult.CONTINUE;
+    }
+
+
+    public void setCurrentDirectory(Path currentDirectory) {
+        this.currentDirectory = currentDirectory;
+    }
+
+    public Path getCurrentDirectory() {
+        return currentDirectory;
     }
 }
