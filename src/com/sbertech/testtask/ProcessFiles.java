@@ -33,7 +33,7 @@ public class ProcessFiles extends SimpleFileVisitor<Path> implements Runnable {
      */
     @Override
     public FileVisitResult visitFile(Path aFile, BasicFileAttributes aAttrs) throws IOException {
-//        System.out.println("File: " + aFile);
+        System.out.println("File: " + aFile);
 
         StringBuilder sb = new StringBuilder();
         sb.append("[\nfile = ")
@@ -66,7 +66,7 @@ public class ProcessFiles extends SimpleFileVisitor<Path> implements Runnable {
      */
     @Override
     public FileVisitResult preVisitDirectory(Path aDir, BasicFileAttributes aAttrs) throws IOException {
-//        System.out.println("Dir: " + aDir.toString());
+        System.out.println("Dir: " + aDir.toString());
         File currentDirectory = new File(aDir.toString());
         if(currentDirectory.list().length <= 0) {
             return FileVisitResult.SKIP_SUBTREE;
@@ -75,7 +75,10 @@ public class ProcessFiles extends SimpleFileVisitor<Path> implements Runnable {
             return FileVisitResult.SKIP_SUBTREE;
         }
 //        //todo: create new thread if there is a space
-
+//
+        if(aDir.getParent() != null && !Main.includedRootFolders.contains(aDir.getParent().toString()) && aDir.getParent().getParent() != null && !Main.includedRootFolders.contains(aDir.getParent().getParent().toString())) {
+            return FileVisitResult.CONTINUE;
+        }
         if(Main.mainExecutor.getActiveCount() < Main.mainExecutor.getMaximumPoolSize() && !Main.currentlyProceededFolders.contains(aDir.toString())) {
             InputParameters folderInputParameters = new InputParameters(aDir.toString(), inputParameters.getExcludedFolders());
 
@@ -83,7 +86,6 @@ public class ProcessFiles extends SimpleFileVisitor<Path> implements Runnable {
             ((ProcessFiles)newProcessFile).setCurrentPath(aDir);
             Main.currentlyProceededFolders.add(aDir.toString());
             Main.mainExecutor.submit((Runnable) newProcessFile);
-
             return FileVisitResult.SKIP_SUBTREE;
         }
         return FileVisitResult.CONTINUE;
@@ -92,8 +94,12 @@ public class ProcessFiles extends SimpleFileVisitor<Path> implements Runnable {
     @Override
     public FileVisitResult postVisitDirectory(Path dir, IOException exc) throws IOException {
         System.out.println("POST : " + dir);
+        System.out.println(Main.currentlyProceededFolders.size());
         Main.currentlyProceededFolders.removeIf(folder -> folder.equals(dir.toString()));
         File currentDirectory = new File(dir.toString());
+        System.out.println("active : " + Main.mainExecutor.getActiveCount());
+        System.out.println("max size : " + Main.mainExecutor.getMaximumPoolSize());
+        System.out.println("task count : " + Main.mainExecutor.getTaskCount());
         if(currentDirectory.list().length > 0) {
             /**
              * Записываем результат в файл.
@@ -107,10 +113,14 @@ public class ProcessFiles extends SimpleFileVisitor<Path> implements Runnable {
 //                writer.append(line);
 //            }
 //        }
-            Path file = Paths.get("temp-scan-dir/scan-result-for-" + this.currentPath.toString().replaceAll("/", "-") + ".txt");
+            File tempDir = new File("temp-scan-dir/"+this.currentPath.toString());
+            tempDir.mkdirs();
+            Path file = Paths.get("temp-scan-dir/"+this.currentPath.toString()+"/scan-result.txt");
             Files.write(file, this.currentResult, StandardOpenOption.APPEND, StandardOpenOption.CREATE);
+            this.currentResult = null;
             if (Main.currentlyProceededFolders.isEmpty()) {
                 Main.mainExecutor.shutdown();
+                System.out.println("getLargestPoolSize = " + Main.mainExecutor.getLargestPoolSize());
 
             }
         }

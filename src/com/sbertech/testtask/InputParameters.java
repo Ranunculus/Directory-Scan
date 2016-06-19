@@ -45,6 +45,9 @@ public class InputParameters {
     }
 
     public ArrayList<String> getExcludedFolders() {
+        if (excludedFolders == null) {
+            excludedFolders = new ArrayList<>();
+        }
         return excludedFolders;
     }
 
