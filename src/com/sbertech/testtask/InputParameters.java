@@ -12,6 +12,8 @@ public class InputParameters {
     private ArrayList<String> excludedFolders;
     private ArrayList<String> includedFolders = new ArrayList<>();
 
+    public InputParameters() {}
+
     public InputParameters(String[] consoleArguments) {
         boolean inclusion = true;
         boolean exlusion = false;
@@ -35,6 +37,11 @@ public class InputParameters {
             }
         }
 
+    }
+
+    public InputParameters(String s, ArrayList<String> excludedFolders) {
+        this.includedFolders.add(s);
+        this.excludedFolders = excludedFolders;
     }
 
     public ArrayList<String> getExcludedFolders() {
