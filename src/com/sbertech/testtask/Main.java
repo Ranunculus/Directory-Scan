@@ -101,7 +101,6 @@ public class Main {
                 throws IOException {
             Path errorLog = Paths.get("scan-error-log.txt");
             Files.write(errorLog, (e.toString() + "\n").getBytes(Charset.forName("UTF-8")), StandardOpenOption.APPEND, StandardOpenOption.CREATE);
-            System.out.println(e.toString());
             filesFailedToScan++;
             return FileVisitResult.CONTINUE;
         }
