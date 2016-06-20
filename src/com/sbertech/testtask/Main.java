@@ -160,6 +160,9 @@ public class Main {
                         return FileVisitResult.CONTINUE;
                     }
 
+                    /**
+                     * После завершения сканирования директории создаём копию её верхней структуры во временной папке.
+                     */
                     @Override
                     public FileVisitResult postVisitDirectory(Path dir, IOException exc) throws IOException {
                         if(dir.equals(RecursiveWalk.this.currentDirectory) && currentResult.size() != 0) {
