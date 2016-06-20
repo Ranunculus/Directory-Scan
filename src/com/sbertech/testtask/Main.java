@@ -1,10 +1,7 @@
 package com.sbertech.testtask;
 
 
-import java.io.BufferedWriter;
-import java.io.IOException;
-import java.io.OutputStream;
-import java.io.OutputStreamWriter;
+import java.io.*;
 import java.nio.charset.Charset;
 import java.nio.charset.CharsetEncoder;
 import java.nio.file.*;
@@ -27,6 +24,16 @@ public class Main {
          */
         InputParameters params = new InputParameters(args);
         /**
+         * Добавляем временную директорию, в которую будут сложены промежуточные результаты сканирования.
+         */
+        File file = new File("temp-scan-dir");
+        file.mkdir();
+
+        /**
+         * Добавляем временную директорию в исключения, чтобы не зациклить поиск новых файлов.
+         */
+        params.getExcludedFolders().add(file.getAbsolutePath());
+        /**
          * Создаём таймер, который будет каждые 6 секунд выводить ".", каждую минуту "|".
          */
         Timer timer = new Timer();
@@ -38,6 +45,7 @@ public class Main {
          */
         long start = System.currentTimeMillis();
         int maxThreads = 20;
+        //todo: include all folders from command line
         RecursiveWalk recursiveWalk = new RecursiveWalk(Paths.get(params.getIncludedFolders().get(0)), params);
         ForkJoinPool forkJoinPool = new ForkJoinPool(maxThreads);
 
@@ -62,6 +70,7 @@ public class Main {
 //        }
 //        result.addAll(((ProcessFiles)fileProcessor).getCurrentResult());
 //
+        //todo: compose one file from others
         /**
          * Записываем результат в файл.
          * Пришлось писать самостоятельно, так как метод Files.write насильно добавляет newLine в конце каждого элемента коллекции.
@@ -160,23 +169,30 @@ public class Main {
                             return FileVisitResult.SKIP_SUBTREE;
                         }
 
-                        if (!aDir.equals(RecursiveWalk.this.currentDirectory) && Thread.activeCount() < 20) {
-//                            System.out.println("Skipping " + aDir + " with \t" + Thread.currentThread().getId());
-                            System.out.println(aDir);
+                        if (!aDir.equals(RecursiveWalk.this.currentDirectory) && Thread.activeCount() < 100) {
+//                            System.out.println(aDir);
                             RecursiveWalk walk = new RecursiveWalk(aDir, params);
                             walk.fork();
                             walks.add(walk);
                             return FileVisitResult.SKIP_SUBTREE;
                         }
-//                        System.out.println(aDir + " \t" + Thread.currentThread());
 
                         return FileVisitResult.CONTINUE;
                     }
 
                     @Override
                     public FileVisitResult postVisitDirectory(Path dir, IOException exc) throws IOException {
-                        if(dir.equals(RecursiveWalk.this.currentDirectory)) {
-//                            System.out.println(Thread.currentThread().getState());
+                        if(dir.equals(RecursiveWalk.this.currentDirectory) && currentResult.size() != 0) {
+                            System.out.println("currentResult = " + currentResult.size());
+
+                            File tempDir = new File("temp-scan-dir/"+dir.toString());
+                            tempDir.mkdirs();
+                            Path file = Paths.get("temp-scan-dir/"+dir.toString()+"/scan-result.txt");
+                            Files.write(file, currentResult, StandardOpenOption.APPEND, StandardOpenOption.CREATE);
+                            /**
+                             * Освобождаем коллекцию для GC.
+                             */
+                            currentResult = null;
                         }
                         Objects.requireNonNull(dir);
                         if (exc != null)
@@ -185,14 +201,12 @@ public class Main {
                     }
                 });
 
-//                for (String includedFolder : params.getIncludedFolders()){
-//                }
             } catch (IOException e) {
                 e.printStackTrace();
             }
 
             walks.forEach(ForkJoinTask::join);
-            System.out.println("currentResult.size() = " + currentResult.size());
+//            System.out.println("currentResult.size() = " + currentResult.size());
             return currentResult;
 
         }
