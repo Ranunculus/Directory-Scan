@@ -42,7 +42,6 @@ public class Main {
          */
         long start = System.currentTimeMillis();
         int maxThreads = 20;
-        //todo: include all folders from command line
         for (String includedFolder : params.getIncludedFolders()) {
             RecursiveWalk recursiveWalk = new RecursiveWalk(Paths.get(includedFolder), params);
             ForkJoinPool forkJoinPool = new ForkJoinPool(maxThreads);
@@ -152,7 +151,6 @@ public class Main {
                         }
 
                         if (!aDir.equals(RecursiveWalk.this.currentDirectory) && Thread.activeCount() < 50) {
-//                            System.out.println(aDir);
                             RecursiveWalk walk = new RecursiveWalk(aDir, params);
                             walk.fork();
                             walks.add(walk);
