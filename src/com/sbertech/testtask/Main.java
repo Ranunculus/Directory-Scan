@@ -1,22 +1,19 @@
 package com.sbertech.testtask;
 
-
 import java.io.*;
 import java.nio.charset.Charset;
-import java.nio.charset.CharsetEncoder;
 import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ForkJoinTask;
-import java.util.concurrent.RecursiveAction;
 import java.util.concurrent.RecursiveTask;
 
 public class Main {
 
-    public static TreeSet<String> result = new TreeSet<>();
-    public static int filesFailedToScan = 0;
+    private static int filesFailedToScan = 0;
+    private static int scannedFiles = 0;
 
     public static void main(String[] args) throws IOException {
         /**
@@ -30,7 +27,7 @@ public class Main {
         file.mkdir();
 
         /**
-         * Добавляем временную директорию в исключения, чтобы не зациклить поиск новых файлов.
+         * Добавляем временную директорию в исключения, чтобы не зациклить поиск на новых файлов.
          */
         params.getExcludedFolders().add(file.getAbsolutePath());
         /**
@@ -41,56 +38,47 @@ public class Main {
         timer.schedule(new TimerForConsole('m'), 60000, 60000);
 
         /**
-         * ==================================================== new
+         * Для каждой включённой в поиск папки запускаем процесс поиска.
          */
         long start = System.currentTimeMillis();
         int maxThreads = 20;
         //todo: include all folders from command line
-        RecursiveWalk recursiveWalk = new RecursiveWalk(Paths.get(params.getIncludedFolders().get(0)), params);
-        ForkJoinPool forkJoinPool = new ForkJoinPool(maxThreads);
-
-        forkJoinPool.invoke(recursiveWalk);
-
+        for (String includedFolder : params.getIncludedFolders()) {
+            RecursiveWalk recursiveWalk = new RecursiveWalk(Paths.get(includedFolder), params);
+            ForkJoinPool forkJoinPool = new ForkJoinPool(maxThreads);
+            forkJoinPool.invoke(recursiveWalk);
+        }
         long end = System.currentTimeMillis();
 
-        System.out.println("Time : " + (end - start) + " in millis");
+
 
         /**
-         * ==================================================== old
+         * Создаём файловый процессор с входящими параметрами и методами для обработки встречающихся нам файлов.
          */
-//        /**
-//         * Создаём файловый процессор с входящими параметрами и методами для обработки встречающихся нам файлов.
-//         */
-//        FileVisitor<Path> fileProcessor = new ProcessFiles(params);
-//        /**
-//         * Сканируем все запрашиваемые папки
-//         */
-//        for (String includedFolder : params.getIncludedFolders()){
-//            Files.walkFileTree(Paths.get(includedFolder), fileProcessor);
-//        }
-//        result.addAll(((ProcessFiles)fileProcessor).getCurrentResult());
-//
-        //todo: compose one file from others
+        SimpleDateFormat format = new SimpleDateFormat("yyyy-MM-dd-hh-mm-ss");
+        FileWriter fw = new FileWriter("scan-result-" + format.format(new Date()) + ".txt");
+        FileVisitor<Path> fileProcessor = new ProcessTempFiles();
+
         /**
-         * Записываем результат в файл.
-         * Пришлось писать самостоятельно, так как метод Files.write насильно добавляет newLine в конце каждого элемента коллекции.
+         * Запускаем ещё один процесс поиска, на этот раз - по созданным папкам.
          */
-        Path resultFile = Paths.get("scan-result.txt");
-        CharsetEncoder encoder = Charset.forName("UTF-8").newEncoder();
-        OutputStream out = Files.newOutputStream(resultFile);
-        try (BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(out, encoder))) {
-            for (String line : result) {
-                writer.append(line);
-            }
-        }
+        ((ProcessTempFiles)fileProcessor).setMainFileWriter(fw);
+
+        /**
+         * Сканируем все запрашиваемые папки.
+         */
+        Files.walkFileTree(Paths.get("temp-scan-dir"), fileProcessor);
+
         /**
          * Закрываем таймер.
          */
         timer.cancel();
+        System.out.println("Execution time  : " + (end - start) + " in milliseconds");
+
         /**
-         * Выдаём пользователю информацию о количестве просканенных файлов и о файлах, которые не удалось простакировать.
+         * Выдаём пользователю информацию о количестве просканенных файлов и о файлах, которые не удалось просканировать.
          */
-        System.out.println("Scanned files: " + result.size());
+        System.out.println("Scanned files: " + scannedFiles);
         if (filesFailedToScan > 0) {
             System.out.println("Files failed to scan: " + filesFailedToScan);
             System.out.println("You can find all failed files and causes in scan-error-log.txt");
@@ -102,6 +90,7 @@ public class Main {
         private final Path currentDirectory;
         private InputParameters params;
         private List<RecursiveWalk> walks = new ArrayList<>();
+
 
         private TreeSet<String> currentResult = new TreeSet<>();
 
@@ -127,8 +116,6 @@ public class Main {
                      */
                     @Override
                     public FileVisitResult visitFile(Path aFile, BasicFileAttributes aAttrs) throws IOException {
-//                        System.out.println(aFile + " \t" + Thread.currentThread().getId());
-//                        System.out.println(Thread.activeCount());
                         StringBuilder sb = new StringBuilder();
                         sb.append("[\nfile = ")
                                 .append(aFile)
@@ -138,6 +125,7 @@ public class Main {
                                 .append(aFile.toFile().length())
                                 .append("]");
                         currentResult.add(sb.toString());
+                        Main.scannedFiles++;
                         return FileVisitResult.CONTINUE;
                     }
 
@@ -163,7 +151,7 @@ public class Main {
                             return FileVisitResult.SKIP_SUBTREE;
                         }
 
-                        if (!aDir.equals(RecursiveWalk.this.currentDirectory) && Thread.activeCount() < 100) {
+                        if (!aDir.equals(RecursiveWalk.this.currentDirectory) && Thread.activeCount() < 50) {
 //                            System.out.println(aDir);
                             RecursiveWalk walk = new RecursiveWalk(aDir, params);
                             walk.fork();
@@ -177,11 +165,9 @@ public class Main {
                     @Override
                     public FileVisitResult postVisitDirectory(Path dir, IOException exc) throws IOException {
                         if(dir.equals(RecursiveWalk.this.currentDirectory) && currentResult.size() != 0) {
-                            System.out.println("currentResult = " + currentResult.size());
-
-                            File tempDir = new File("temp-scan-dir/"+dir.toString());
+                            File tempDir = new File("temp-scan-dir" + File.separator + dir.toString());
                             tempDir.mkdirs();
-                            Path file = Paths.get("temp-scan-dir/"+dir.toString()+"/scan-result.txt");
+                            Path file = Paths.get("temp-scan-dir" + File.separator + dir.toString() + File.separator + "scan-result.txt");
                             Files.write(file, currentResult, StandardOpenOption.APPEND, StandardOpenOption.CREATE);
                             /**
                              * Освобождаем коллекцию для GC.
@@ -200,7 +186,6 @@ public class Main {
             }
 
             walks.forEach(ForkJoinTask::join);
-//            System.out.println("currentResult.size() = " + currentResult.size());
             return currentResult;
 
         }
