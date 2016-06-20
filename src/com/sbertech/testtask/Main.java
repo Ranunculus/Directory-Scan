@@ -14,6 +14,7 @@ import java.util.*;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ForkJoinTask;
 import java.util.concurrent.RecursiveAction;
+import java.util.concurrent.RecursiveTask;
 
 public class Main {
 
@@ -37,10 +38,10 @@ public class Main {
          */
         long start = System.currentTimeMillis();
         int maxThreads = 20;
-        RecursiveWalk recurisiveWalk = new RecursiveWalk(Paths.get(params.getIncludedFolders().get(0)), params);
+        RecursiveWalk recursiveWalk = new RecursiveWalk(Paths.get(params.getIncludedFolders().get(0)), params);
         ForkJoinPool forkJoinPool = new ForkJoinPool(maxThreads);
 
-        forkJoinPool.invoke(recurisiveWalk);
+        forkJoinPool.invoke(recursiveWalk);
 
         long end = System.currentTimeMillis();
 
@@ -88,11 +89,12 @@ public class Main {
 
     }
 
-    public static class RecursiveWalk extends RecursiveAction {
+    public static class RecursiveWalk extends RecursiveTask<TreeSet<String>> {
         private final Path currentDirectory;
         private InputParameters params;
         private List<RecursiveWalk> walks = new ArrayList<>();
 
+        private TreeSet<String> currentResult = new TreeSet<>();
 
         public List<RecursiveWalk> getWalks() {
             return walks;
@@ -108,7 +110,7 @@ public class Main {
         }
 
         @Override
-        protected void compute(){
+        protected TreeSet<String> compute(){
             /**
              * Создаём файловый процессор с входящими параметрами и методами для обработки встречающихся нам файлов.
              */
@@ -117,57 +119,71 @@ public class Main {
 
             try{
                 Files.walkFileTree(currentDirectory, new SimpleFileVisitor<Path>() {
+                    /**
+                     * Метод создаёт из метаданных файла строку нужного формата и записывает в коллекцию result.
+                     */
+                    @Override
+                    public FileVisitResult visitFile(Path aFile, BasicFileAttributes aAttrs) throws IOException {
+//                        System.out.println(aFile + " \t" + Thread.currentThread().getId());
+//                        System.out.println(Thread.activeCount());
+                        StringBuilder sb = new StringBuilder();
+                        sb.append("[\nfile = ")
+                                .append(aFile)
+                                .append("\ndate = ")
+                                .append(new SimpleDateFormat("yyyy.MM.dd").format(new Date(aFile.toFile().lastModified())))
+                                .append("\nsize = ")
+                                .append(aFile.toFile().length())
+                                .append("]");
+                        currentResult.add(sb.toString());
+                        return FileVisitResult.CONTINUE;
+                    }
 
-                            /**
-                             * Метод создаёт из метаданных файла строку нужного формата и записывает в коллекцию result.
-                             */
-                            @Override
-                            public FileVisitResult visitFile(Path aFile, BasicFileAttributes aAttrs) throws IOException {
-//                                System.out.println(aFile + " \t" + Thread.currentThread());
-                                StringBuilder sb = new StringBuilder();
-                                sb.append("[\nfile = ")
-                                        .append(aFile)
-                                        .append("\ndate = ")
-                                        .append(new SimpleDateFormat("yyyy.MM.dd").format(new Date(aFile.toFile().lastModified())))
-                                        .append("\nsize = ")
-                                        .append(aFile.toFile().length())
-                                        .append("]");
-                                result.add(sb.toString());
-                                return FileVisitResult.CONTINUE;
-                            }
+                    /**
+                     * Метод инкрементирует количество файлов, которые не удалось просканировать и добавляет их в executor, чтобы тот мог записать лог ошибок.
+                     */
+                    @Override
+                    public FileVisitResult visitFileFailed(Path file, IOException e)
+                            throws IOException {
+                        Path errorLog = Paths.get("scan-error-log.txt");
+                        Files.write(errorLog, (e.toString() + "\n").getBytes(Charset.forName("UTF-8")), StandardOpenOption.APPEND, StandardOpenOption.CREATE);
+                        Main.filesFailedToScan++;
+                        return FileVisitResult.CONTINUE;
+                    }
 
-                            /**
-                             * Метод инкрементирует количество файлов, которые не удалось просканировать и добавляет их в executor, чтобы тот мог записать лог ошибок.
-                             */
-                            @Override
-                            public FileVisitResult visitFileFailed(Path file, IOException e)
-                                    throws IOException {
-                                Path errorLog = Paths.get("scan-error-log.txt");
-                                Files.write(errorLog, (e.toString() + "\n").getBytes(Charset.forName("UTF-8")), StandardOpenOption.APPEND, StandardOpenOption.CREATE);
-                                Main.filesFailedToScan++;
-                                return FileVisitResult.CONTINUE;
-                            }
+                    /**
+                     * Метод проверяет, можем ли мы сканировать текущую папку. Если да - продолжаем. Если нет - пропускаем все её вложенные файлы и папки.
+                     */
+                    @Override
+                    public FileVisitResult preVisitDirectory(Path aDir, BasicFileAttributes aAttrs) throws IOException {
 
-                            /**
-                             * Метод проверяет, можем ли мы сканировать текущую папку. Если да - продолжаем. Если нет - пропускаем все её вложенные файлы и папки.
-                             */
-                            @Override
-                            public FileVisitResult preVisitDirectory(Path aDir, BasicFileAttributes aAttrs) throws IOException {
+                        if (params.getExcludedFolders() != null && params.getExcludedFolders().contains(aDir.toString())) {
+                            return FileVisitResult.SKIP_SUBTREE;
+                        }
 
-                                if (params.getExcludedFolders() != null && params.getExcludedFolders().contains(aDir.toString())) {
-                                    return FileVisitResult.SKIP_SUBTREE;
-                                }
-//                                System.out.println(aDir + " \t" + Thread.currentThread());
+                        if (!aDir.equals(RecursiveWalk.this.currentDirectory) && Thread.activeCount() < 20) {
+//                            System.out.println("Skipping " + aDir + " with \t" + Thread.currentThread().getId());
+                            System.out.println(aDir);
+                            RecursiveWalk walk = new RecursiveWalk(aDir, params);
+                            walk.fork();
+                            walks.add(walk);
+                            return FileVisitResult.SKIP_SUBTREE;
+                        }
+//                        System.out.println(aDir + " \t" + Thread.currentThread());
 
-                                if (!aDir.equals(RecursiveWalk.this.currentDirectory)) {
-                                    RecursiveWalk walk = new RecursiveWalk(aDir, params);
-                                    walk.fork();
-                                    walks.add(walk);
-                                    return FileVisitResult.SKIP_SUBTREE;
-                                }
-                                return FileVisitResult.CONTINUE;
-                            }
-                        });
+                        return FileVisitResult.CONTINUE;
+                    }
+
+                    @Override
+                    public FileVisitResult postVisitDirectory(Path dir, IOException exc) throws IOException {
+                        if(dir.equals(RecursiveWalk.this.currentDirectory)) {
+//                            System.out.println(Thread.currentThread().getState());
+                        }
+                        Objects.requireNonNull(dir);
+                        if (exc != null)
+                            throw exc;
+                        return FileVisitResult.CONTINUE;
+                    }
+                });
 
 //                for (String includedFolder : params.getIncludedFolders()){
 //                }
@@ -176,6 +192,9 @@ public class Main {
             }
 
             walks.forEach(ForkJoinTask::join);
+            System.out.println("currentResult.size() = " + currentResult.size());
+            return currentResult;
+
         }
     }
 
