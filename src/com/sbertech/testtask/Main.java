@@ -120,12 +120,6 @@ public class Main {
 
         @Override
         protected TreeSet<String> compute(){
-            /**
-             * Создаём файловый процессор с входящими параметрами и методами для обработки встречающихся нам файлов.
-             */
-            FileVisitor<Path> fileProcessor = new ProcessFiles(params);
-            ((ProcessFiles)fileProcessor).setCurrentDirectory(currentDirectory);
-
             try{
                 Files.walkFileTree(currentDirectory, new SimpleFileVisitor<Path>() {
                     /**
